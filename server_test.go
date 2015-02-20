@@ -25,40 +25,67 @@ func TestStopServer_goroutines(t *testing.T) {
 }
 
 func TestStopServer_disconnects(t *testing.T) {
-	connected := 0
-
+	connections := 0
 	s := NewServer()
 	s.OnConnect = func(name, room string) {
-		connected += 1
+		connections++
 	}
 	s.OnDisconnect = func(name, room string) {
-		connected -= 1
+		connections--
 	}
 	s.StartServer(4009)
 
-	sleep()
+	connectAndSend(t, "a foo 123")
+	connectAndSend(t, "a bar 123")
 
+	if connections != 2 {
+		t.Error("exactly two clients should be connected now")
+	}
+
+	s.StopServer()
+
+	if connections != 0 {
+		t.Error("server should disconnect ongoing clients")
+	}
+}
+
+func TestFlow_connectionHandler(t *testing.T) {
+	connected := false
+	s := NewServer()
+	s.OnConnect = func(name, room string) {
+		connected = true
+	}
+	s.StartServer(4009)
+
+	connectAndSend(t, "a foo 123")
+
+	if !connected {
+		t.Error("on connect did not fire")
+	}
+	s.StopServer()
+}
+
+func connect(t *testing.T) net.Conn {
 	conn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
 		t.Fatal(err)
 	}
+	return conn
+}
 
-	_, e := conn.Write([]byte("a prozz 123"))
-	if e != nil {
-		t.Error("cannot send auth msg")
+func send(t *testing.T, conn net.Conn, msgs ...string) {
+	for _, msg := range msgs {
+		_, e := conn.Write([]byte(msg))
+		if e != nil {
+			t.Errorf("cannot send msg: %s", msg)
+		}
+		// we are faster locally so have to delay stuff a little
+		sleep()
 	}
+}
 
-	sleep()
-
-	if connected != 1 {
-		t.Error("one client should be connected")
-	}
-	s.StopServer()
-
-	if connected != 0 {
-		t.Fatal("no disconnect")
-	}
-
+func connectAndSend(t *testing.T, msgs ...string) {
+	send(t, connect(t), msgs...)
 }
 
 func sleep() {
