@@ -34,21 +34,55 @@ type Server struct {
 
 	incomingRequests chan (Request)
 	responses chan (Response)
+
+	listener net.Listener
+
+	serverShutdown bool
+
+	OnConnect func(name, room string)
+	OnDisconnect func(name, room string)
+	OnMessage func(name, room, message string)
 }
 
-func StartServer(port int) {
+func NewServer() *Server {
 	s := &Server{}
-	s.port = port
-	s.startTime = time.Now()
 
 	s.incomingClients = make(chan *Client)
 	s.disconnectingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
 
+	s.OnConnect = func(name, room string) {
+		log.Println("warn: OnConnect default handler")
+	}
+	s.OnDisconnect = func(name, room string) {
+		log.Println("warn: OnDisconnect default handler")
+	}
+	s.OnMessage = func(name, room, message string) {
+		log.Println("warn: OnMessage default handler")
+	}
+
+	return s
+}
+
+func (s *Server) StartServer(port int) {
+	s.port = port
+	s.startTime = time.Now()
+
+	log.Printf("starting server on port %d", s.port)
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
+	if err != nil {
+		log.Fatal("cannot listen:", err)
+	}
+
+	s.listener = listener
+
 	go s.processingLoop()
 	go s.acceptingLoop()
+}
 
-	// signals handling, makes above loops go forever
+func (s *Server) StartServerAndWait(port int) {
+	s.StartServer(port)
+
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for {
@@ -57,21 +91,24 @@ func StartServer(port int) {
 		case syscall.SIGQUIT:
 			s.DumpStats()
 		default:
-			s.Stop()
+			s.StopServer()
 			os.Exit(0)
 		}
 	}
 }
 
-func (s *Server) acceptingLoop() {
-	log.Printf("starting server on port %d", s.port)
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
-	if err != nil {
-		log.Fatal("cannot listen:", err)
-	}
+func (s *Server) StopServer() {
+	log.Printf("shutting down...")
+	s.serverShutdown = true
+	s.listener.Close()
+}
 
+func (s *Server) acceptingLoop() {
 	for {
-		conn, err := listener.Accept()
+		conn, err := s.listener.Accept()
+		if s.serverShutdown {
+			return
+		}
 		if err != nil {
 			log.Println("accept error:", err)
 			continue
@@ -101,6 +138,9 @@ func (s *Server) clientReaderLoop(client *Client) {
 	for {
 		var req string
 		err := read(&req, client.conn)
+		if s.serverShutdown {
+		//	return
+		}
 		if err != nil {
 			log.Println("read error:", err)
 			s.disconnectingClients <- client
@@ -119,11 +159,14 @@ func (s *Server) processingLoop() {
 		select {
 		case c := <-s.incomingClients:
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
+			s.OnConnect(c.name, c.room)
 		case c := <-s.disconnectingClients:
 			c.conn.Close()
 			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
+			s.OnDisconnect(c.name, c.room)
 		case r := <-s.incomingRequests:
 			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
+			s.OnMessage(r.client.name, r.client.room, r.msg)
 
 		case r := <-s.responses:
 			log.Printf("[audit] xxx %s", r)
@@ -132,10 +175,6 @@ func (s *Server) processingLoop() {
 }
 func (s *Server) DumpStats() {
 	log.Printf("uptime: %s", time.Since(s.startTime))
-}
-
-func (s *Server) Stop() {
-	log.Printf("shutting down...")
 }
 
 // reads initial auth packet from connection
