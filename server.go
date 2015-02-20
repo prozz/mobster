@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strings"
-	"time"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 )
 
 type Client struct {
@@ -33,15 +33,15 @@ type Server struct {
 	disconnectingClients chan (*Client)
 
 	incomingRequests chan (Request)
-	responses chan (Response)
+	responses        chan (Response)
 
 	listener net.Listener
 
 	serverShutdown bool
 
-	OnConnect func(name, room string)
+	OnConnect    func(name, room string)
 	OnDisconnect func(name, room string)
-	OnMessage func(name, room, message string)
+	OnMessage    func(name, room, message string)
 }
 
 func NewServer() *Server {
@@ -139,7 +139,7 @@ func (s *Server) clientReaderLoop(client *Client) {
 		var req string
 		err := read(&req, client.conn)
 		if s.serverShutdown {
-		//	return
+			//	return
 		}
 		if err != nil {
 			log.Println("read error:", err)

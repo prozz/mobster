@@ -1,11 +1,11 @@
 package mobster
 
 import (
-	"testing"
 	"log"
-	"time"
 	"net"
 	"runtime"
+	"testing"
+	"time"
 )
 
 func TestStopServer_goroutines(t *testing.T) {
