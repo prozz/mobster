@@ -5,13 +5,26 @@ import (
 	"log"
 	"time"
 	"net"
+	"runtime"
 )
 
-func sleep() {
-	time.Sleep(50 * time.Millisecond)
+func TestStopServer_goroutines(t *testing.T) {
+	before := runtime.NumGoroutine()
+	s := NewServer()
+	s.StartServer(4009)
+	during := runtime.NumGoroutine()
+	if before >= during {
+		t.Error("server doesnt fire properly, as no new goroutines")
+	}
+	s.StopServer()
+	after := runtime.NumGoroutine()
+	if after != before {
+		t.Error("server goroutines should stop")
+	}
+	log.Printf("goroutines count: before %d, during %d, after %d", before, during, after)
 }
 
-func TestMobsterBasicFlow(t *testing.T) {
+func TestStopServer_disconnects(t *testing.T) {
 	connected := 0
 
 	s := NewServer()
@@ -45,21 +58,9 @@ func TestMobsterBasicFlow(t *testing.T) {
 	if connected != 0 {
 		t.Fatal("no disconnect")
 	}
+
 }
 
-func TestMobsterXXX(t *testing.T) {
-	log.Println("222")
-	s := NewServer()
-	s.StartServer(4009)
-	time.Sleep(1 * time.Second)
-
-	_, err := net.Dial("tcp", "127.0.0.1:4009")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	time.Sleep(1 * time.Second)
-
-	log.Println("testing!")
-	s.StopServer()
+func sleep() {
+	time.Sleep(50 * time.Millisecond)
 }
