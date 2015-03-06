@@ -37,7 +37,12 @@ type Server struct {
 
 	listener net.Listener
 
-	serverShutdown bool
+	clients map[*Client]bool
+
+	// notifies goroutines about shutdown procedure
+	shutdownNow chan(chan bool)
+	// true when shutdown procedure started, false otherwise
+	shutdownMode bool
 
 	OnConnect    func(name, room string)
 	OnDisconnect func(name, room string)
@@ -50,6 +55,9 @@ func NewServer() *Server {
 	s.incomingClients = make(chan *Client)
 	s.disconnectingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
+	s.shutdownNow = make(chan (chan bool))
+
+	s.clients = make(map[*Client]bool)
 
 	s.OnConnect = func(name, room string) {
 		log.Println("warn: OnConnect default handler")
@@ -99,14 +107,18 @@ func (s *Server) StartServerAndWait(port int) {
 
 func (s *Server) StopServer() {
 	log.Printf("shutting down...")
-	s.serverShutdown = true
+	s.shutdownMode = true
 	s.listener.Close()
+
+	done := make(chan bool, 1)
+	s.shutdownNow <- done
+	<-done
 }
 
 func (s *Server) acceptingLoop() {
 	for {
 		conn, err := s.listener.Accept()
-		if s.serverShutdown {
+		if s.shutdownMode {
 			return
 		}
 		if err != nil {
@@ -129,6 +141,7 @@ func handleConnection(s *Server, conn net.Conn) {
 	conn.SetDeadline(time.Time{})
 
 	client := &Client{name, room, conn}
+	s.clients[client] = true
 	s.incomingClients <- client
 
 	go s.clientReaderLoop(client)
@@ -138,9 +151,6 @@ func (s *Server) clientReaderLoop(client *Client) {
 	for {
 		var req string
 		err := read(&req, client.conn)
-		if s.serverShutdown {
-			//	return
-		}
 		if err != nil {
 			log.Println("read error:", err)
 			s.disconnectingClients <- client
@@ -157,11 +167,21 @@ func (s *Server) clientReaderLoop(client *Client) {
 func (s *Server) processingLoop() {
 	for {
 		select {
+		case done :=  <-s.shutdownNow:
+			for c := range s.clients {
+				c.conn.Close()
+				delete(s.clients, c)
+				log.Printf("[audit] %s: %s force disconnects", c.room, c.name)
+				s.OnDisconnect(c.name, c.room)
+			}
+			done <- true
+			return
 		case c := <-s.incomingClients:
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
 			s.OnConnect(c.name, c.room)
 		case c := <-s.disconnectingClients:
 			c.conn.Close()
+			delete(s.clients, c)
 			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
 			s.OnDisconnect(c.name, c.room)
 		case r := <-s.incomingRequests:
@@ -173,6 +193,7 @@ func (s *Server) processingLoop() {
 		}
 	}
 }
+
 func (s *Server) DumpStats() {
 	log.Printf("uptime: %s", time.Since(s.startTime))
 }
