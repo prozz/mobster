@@ -1,15 +1,14 @@
 package mobster
 
 import (
+	"flag"
+	"io/ioutil"
 	"log"
 	"net"
 	"runtime"
 	"testing"
 	"time"
-	"io/ioutil"
-	"flag"
 )
-
 
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -36,7 +35,7 @@ func TestStopServer_goroutines(t *testing.T) {
 	log.Printf("goroutines count: before %d, during %d, after %d", before, during, after)
 }
 
-func TestStopServer_disconnects(t *testing.T) {
+func TestStopServer_disconnectHandler(t *testing.T) {
 	connections := 0
 	s := NewServer()
 	s.OnConnect = func(name, room string) {
@@ -61,7 +60,7 @@ func TestStopServer_disconnects(t *testing.T) {
 	}
 }
 
-func TestFlow_connectionHandler(t *testing.T) {
+func TestFlow_connectHandler(t *testing.T) {
 	connected := false
 	s := NewServer()
 	s.OnConnect = func(name, room string) {
@@ -74,6 +73,25 @@ func TestFlow_connectionHandler(t *testing.T) {
 	if !connected {
 		t.Error("on connect did not fire")
 	}
+	s.StopServer()
+}
+
+func TestFlow_remoteDisconnect(t *testing.T) {
+	called := false
+	s := NewServer()
+	s.OnDisconnect = func(name, room string) {
+		called = true
+	}
+	s.StartServer(4009)
+
+	c := connectAndSend(t, "a foo 123")
+	send(t, c, "d")
+	c.Close()
+
+	if !called {
+		t.Error("no OnDisconnect called after remote disconnect")
+	}
+
 	s.StopServer()
 }
 
@@ -96,8 +114,10 @@ func send(t *testing.T, conn net.Conn, msgs ...string) {
 	}
 }
 
-func connectAndSend(t *testing.T, msgs ...string) {
-	send(t, connect(t), msgs...)
+func connectAndSend(t *testing.T, msgs ...string) net.Conn {
+	conn := connect(t)
+	send(t, conn, msgs...)
+	return conn
 }
 
 func sleep() {

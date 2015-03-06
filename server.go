@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"sync"
 )
 
 type Client struct {
@@ -30,7 +31,6 @@ type Server struct {
 	startTime time.Time
 
 	incomingClients      chan (*Client)
-	disconnectingClients chan (*Client)
 
 	incomingRequests chan (Request)
 	responses        chan (Response)
@@ -39,10 +39,12 @@ type Server struct {
 
 	clients map[*Client]bool
 
-	// notifies processingLoop about shutdown procedure
-	shutdownNow chan(chan bool)
 	// true when shutdown procedure started, false otherwise
 	shutdownMode bool
+	// notifies processingLoop about shutdown procedure
+	shutdownNow chan (bool)
+
+	shutdownWaitGroup *sync.WaitGroup
 
 	OnConnect    func(name, room string)
 	OnDisconnect func(name, room string)
@@ -53,11 +55,12 @@ func NewServer() *Server {
 	s := &Server{}
 
 	s.incomingClients = make(chan *Client)
-	s.disconnectingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
-	s.shutdownNow = make(chan (chan bool))
+	s.shutdownNow = make(chan bool)
 
 	s.clients = make(map[*Client]bool)
+
+	s.shutdownWaitGroup = &sync.WaitGroup{}
 
 	s.OnConnect = func(name, room string) {
 		log.Println("warn: OnConnect default handler")
@@ -110,9 +113,9 @@ func (s *Server) StopServer() {
 	s.shutdownMode = true
 	s.listener.Close()
 
-	done := make(chan bool, 1)
-	s.shutdownNow <- done
-	<-done
+	s.shutdownNow <- true
+
+	s.shutdownWaitGroup.Wait()
 }
 
 func (s *Server) acceptingLoop() {
@@ -127,7 +130,6 @@ func (s *Server) acceptingLoop() {
 		}
 		go handleConnection(s, conn)
 	}
-
 }
 
 func handleConnection(s *Server, conn net.Conn) {
@@ -148,12 +150,13 @@ func handleConnection(s *Server, conn net.Conn) {
 }
 
 func (s *Server) clientReaderLoop(client *Client) {
+	s.shutdownWaitGroup.Add(1)
+	defer s.shutdownWaitGroup.Done()
 	for {
 		var req string
 		err := read(&req, client.conn)
 		if err != nil {
 			log.Println("read error:", err)
-			s.disconnectingClients <- client
 			return
 		}
 		msgs := strings.Split(req, "\n")
@@ -165,28 +168,31 @@ func (s *Server) clientReaderLoop(client *Client) {
 
 // extracted to go routine, so that rooms ops are thread safe (adding/removing clients)
 func (s *Server) processingLoop() {
+	s.shutdownWaitGroup.Add(1)
+	defer s.shutdownWaitGroup.Done()
 	for {
 		select {
-		case done :=  <-s.shutdownNow:
+		case <-s.shutdownNow:
 			for c := range s.clients {
 				c.conn.Close()
 				delete(s.clients, c)
 				log.Printf("[audit] %s: %s force disconnects", c.room, c.name)
 				s.OnDisconnect(c.name, c.room)
 			}
-			done <-true
 			return
 		case c := <-s.incomingClients:
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
 			s.OnConnect(c.name, c.room)
-		case c := <-s.disconnectingClients:
-			c.conn.Close()
-			delete(s.clients, c)
-			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
-			s.OnDisconnect(c.name, c.room)
 		case r := <-s.incomingRequests:
-			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
-			s.OnMessage(r.client.name, r.client.room, r.msg)
+			if r.msg == "d" {
+				r.client.conn.Close()
+				delete(s.clients, r.client)
+				log.Printf("[audit] %s: %s disconnects", r.client.room, r.client.name)
+				s.OnDisconnect(r.client.name, r.client.room)
+			} else {
+				log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
+				s.OnMessage(r.client.name, r.client.room, r.msg)
+			}
 
 		case r := <-s.responses:
 			log.Printf("[audit] xxx %s", r)
@@ -195,7 +201,7 @@ func (s *Server) processingLoop() {
 }
 
 func (s *Server) DumpStats() {
-	log.Printf("uptime: %s", time.Since(s.startTime))
+	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), len(s.clients))
 }
 
 // reads initial auth packet from connection
