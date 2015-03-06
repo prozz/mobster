@@ -6,7 +6,18 @@ import (
 	"runtime"
 	"testing"
 	"time"
+	"io/ioutil"
+	"flag"
 )
+
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	if !testing.Verbose() {
+		log.SetOutput(ioutil.Discard)
+	}
+	m.Run()
+}
 
 func TestStopServer_goroutines(t *testing.T) {
 	before := runtime.NumGoroutine()
@@ -21,6 +32,7 @@ func TestStopServer_goroutines(t *testing.T) {
 	if after != before {
 		t.Error("server goroutines should stop")
 	}
+
 	log.Printf("goroutines count: before %d, during %d, after %d", before, during, after)
 }
 

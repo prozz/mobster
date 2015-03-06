@@ -39,7 +39,7 @@ type Server struct {
 
 	clients map[*Client]bool
 
-	// notifies goroutines about shutdown procedure
+	// notifies processingLoop about shutdown procedure
 	shutdownNow chan(chan bool)
 	// true when shutdown procedure started, false otherwise
 	shutdownMode bool
@@ -174,7 +174,7 @@ func (s *Server) processingLoop() {
 				log.Printf("[audit] %s: %s force disconnects", c.room, c.name)
 				s.OnDisconnect(c.name, c.room)
 			}
-			done <- true
+			done <-true
 			return
 		case c := <-s.incomingClients:
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
