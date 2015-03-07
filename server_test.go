@@ -76,7 +76,7 @@ func TestFlow_connectHandler(t *testing.T) {
 	s.StopServer()
 }
 
-func TestFlow_remoteDisconnect(t *testing.T) {
+func TestFlow_remoteHardDisconnect(t *testing.T) {
 	called := false
 	s := NewServer()
 	s.OnDisconnect = func(name, room string) {
@@ -85,8 +85,8 @@ func TestFlow_remoteDisconnect(t *testing.T) {
 	s.StartServer(4009)
 
 	c := connectAndSend(t, "a foo 123")
-	send(t, c, "d")
 	c.Close()
+	sleep()
 
 	if !called {
 		t.Error("no OnDisconnect called after remote disconnect")
