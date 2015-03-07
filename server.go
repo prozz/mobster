@@ -213,7 +213,7 @@ func (s *Server) DumpStats() {
 
 func (s *Server) SendTo(name, message string) {
 	go func() {
-		s.responses <- Response{name, message}
+		s.responses <- Response{s.clientsByName[name], message}
 	}()
 }
 
