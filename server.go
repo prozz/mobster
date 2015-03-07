@@ -18,7 +18,7 @@ type Request struct {
 }
 
 type Response struct {
-	name string
+	name string	// name of either room or user
 	msg  string
 }
 
