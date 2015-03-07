@@ -9,7 +9,7 @@ type Client struct {
 }
 
 type ClientHolder struct {
-	clients map[*Client]bool
+	clients       map[*Client]bool
 	clientsByName map[string]*Client
 	clientsByRoom map[string][]*Client
 }

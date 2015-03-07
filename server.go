@@ -19,7 +19,7 @@ type Request struct {
 
 type Response struct {
 	name string
-	msg string
+	msg  string
 }
 
 type Server struct {
