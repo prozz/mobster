@@ -43,9 +43,9 @@ type Server struct {
 
 	shutdownWaitGroup *sync.WaitGroup
 
-	OnConnect    func(name, room string)
-	OnDisconnect func(name, room string)
-	OnMessage    func(name, room, message string)
+	OnConnect    func(ctx Ctx, name, room string)
+	OnDisconnect func(ctx Ctx, name, room string)
+	OnMessage    func(ctx Ctx, name, room, message string)
 }
 
 func NewServer() *Server {
@@ -62,13 +62,13 @@ func NewServer() *Server {
 
 	s.shutdownWaitGroup = &sync.WaitGroup{}
 
-	s.OnConnect = func(name, room string) {
+	s.OnConnect = func(ctx Ctx, name, room string) {
 		log.Println("warn: OnConnect default handler")
 	}
-	s.OnDisconnect = func(name, room string) {
+	s.OnDisconnect = func(ctx Ctx, name, room string) {
 		log.Println("warn: OnDisconnect default handler")
 	}
-	s.OnMessage = func(name, room, message string) {
+	s.OnMessage = func(ctx Ctx, name, room, message string) {
 		log.Println("warn: OnMessage default handler")
 	}
 
@@ -183,10 +183,10 @@ func (s *Server) processingLoop() {
 		case c := <-s.incomingClients:
 			s.clientHolder.Add(c)
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
-			s.OnConnect(c.name, c.room)
+			s.OnConnect(s, c.name, c.room)
 		case r := <-s.incomingRequests:
 			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
-			s.OnMessage(r.client.name, r.client.room, r.msg)
+			s.OnMessage(s, r.client.name, r.client.room, r.msg)
 		case r := <-s.writeToClient:
 			c := s.clientHolder.GetByName(r.name)
 			s.send(c, r.msg)
@@ -207,11 +207,16 @@ func (s *Server) send(client *Client, msg string) {
 func (s *Server) disconnect(client *Client) {
 	client.conn.Close()
 	s.clientHolder.Remove(client)
-	s.OnDisconnect(client.name, client.room)
+	s.OnDisconnect(s, client.name, client.room)
 }
 
 func (s *Server) DumpStats() {
 	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), s.clientHolder.Count())
+}
+
+type Ctx interface {
+	SendTo(name, message string)
+	SendToRoom(name, message string)
 }
 
 func (s *Server) SendTo(name, message string) {

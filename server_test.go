@@ -38,10 +38,10 @@ func TestStopServer_goroutines(t *testing.T) {
 func TestStopServer_disconnectHandler(t *testing.T) {
 	connections := 0
 	s := NewServer()
-	s.OnConnect = func(name, room string) {
+	s.OnConnect = func(ctx Ctx, name, room string) {
 		connections++
 	}
-	s.OnDisconnect = func(name, room string) {
+	s.OnDisconnect = func(ctx Ctx, name, room string) {
 		connections--
 	}
 	s.StartServer(4009)
@@ -63,7 +63,7 @@ func TestStopServer_disconnectHandler(t *testing.T) {
 func TestFlow_connectHandler(t *testing.T) {
 	connected := false
 	s := NewServer()
-	s.OnConnect = func(name, room string) {
+	s.OnConnect = func(ctx Ctx, name, room string) {
 		connected = true
 	}
 	s.StartServer(4009)
@@ -79,7 +79,7 @@ func TestFlow_connectHandler(t *testing.T) {
 func TestFlow_remoteHardDisconnect(t *testing.T) {
 	called := false
 	s := NewServer()
-	s.OnDisconnect = func(name, room string) {
+	s.OnDisconnect = func(ctx Ctx, name, room string) {
 		called = true
 	}
 	s.StartServer(4009)
@@ -98,7 +98,7 @@ func TestFlow_remoteHardDisconnect(t *testing.T) {
 func TestFlow_messageHandler(t *testing.T) {
 	called := false
 	s := NewServer()
-	s.OnMessage = func(name, room, message string) {
+	s.OnMessage = func(ctx Ctx, name, room, message string) {
 		called = true
 	}
 	s.StartServer(4009)
@@ -113,10 +113,10 @@ func TestFlow_messageHandler(t *testing.T) {
 	s.StopServer()
 }
 
-func TestFlow_messageHandlerResponse(t *testing.T) {
+func TestFlow_echoResponse(t *testing.T) {
 	s := NewServer()
-	s.OnMessage = func(name, room, message string) {
-		s.SendTo(name, message)
+	s.OnMessage = func(ctx Ctx, name, room, message string) {
+		ctx.SendTo(name, message)
 	}
 	s.StartServer(4009)
 
@@ -129,6 +129,28 @@ func TestFlow_messageHandlerResponse(t *testing.T) {
 	}
 
 	s.StopServer()
+}
+
+func TestFlow_echoToRoomResponse(t *testing.T) {
+	s := NewServer()
+	s.OnMessage = func(ctx Ctx, name, room, message string) {
+		ctx.SendToRoom(room, message)
+	}
+	s.StartServer(4009)
+
+	c1 := connectAndSend(t, "a foo 123")
+	c2 := connectAndSend(t, "a bar 123")
+
+	send(t, c1, "boo")
+
+	r1 := readFromServer(t, c1)
+	if r1 != "boo" {
+		t.Error("expected response for r1")
+	}
+	r2 := readFromServer(t, c2)
+	if r2 != "boo" {
+		t.Error("expected response for r2")
+	}
 }
 
 func connect(t *testing.T) net.Conn {
