@@ -7,9 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
-	"sync"
 )
 
 type Client struct {
@@ -30,10 +30,10 @@ type Server struct {
 	port      int
 	startTime time.Time
 
-	incomingClients      chan (*Client)
+	incomingClients  chan (*Client)
 	incomingRequests chan (Request)
 	responses        chan (Response)
-	disconnects chan(*Client)
+	disconnects      chan (*Client)
 
 	listener net.Listener
 
