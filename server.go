@@ -12,19 +12,13 @@ import (
 	"time"
 )
 
-type Client struct {
-	name string
-	room string
-	conn net.Conn
-}
-
 type Request struct {
 	client *Client
 	msg    string
 }
 
 type Response struct {
-	client *Client
+	name string
 	msg string
 }
 
@@ -34,13 +28,13 @@ type Server struct {
 
 	incomingClients  chan (*Client)
 	incomingRequests chan (Request)
-	responses        chan (Response)
+	writeToClient    chan (Response)
+	writeToRoom      chan (Response)
 	disconnects      chan (*Client)
 
 	listener net.Listener
 
-	clients map[*Client]bool
-	clientsByName map[string]*Client
+	clientHolder *ClientHolder
 
 	// true when shutdown procedure started, false otherwise
 	shutdownMode bool
@@ -59,11 +53,12 @@ func NewServer() *Server {
 
 	s.incomingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
-	s.responses = make(chan Response)
+	s.writeToClient = make(chan Response)
+	s.writeToRoom = make(chan Response)
 	s.disconnects = make(chan *Client)
 	s.shutdownNow = make(chan bool)
-	s.clients = make(map[*Client]bool)
-	s.clientsByName = make(map[string]*Client)
+
+	s.clientHolder = NewClientHolder()
 
 	s.shutdownWaitGroup = &sync.WaitGroup{}
 
@@ -152,8 +147,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 	conn.SetDeadline(time.Time{})
 
 	client := &Client{name, room, conn}
-	s.clients[client] = true
-	s.clientsByName[name] = client
 	s.incomingClients <- client
 
 	for {
@@ -180,7 +173,7 @@ func (s *Server) processingLoop() {
 		select {
 		case <-s.shutdownNow:
 			log.Printf("disconnecting all clients")
-			for c := range s.clients {
+			for _, c := range s.clientHolder.GetAll() {
 				s.disconnect(c)
 			}
 			return
@@ -188,32 +181,48 @@ func (s *Server) processingLoop() {
 			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
 			s.disconnect(c)
 		case c := <-s.incomingClients:
+			s.clientHolder.Add(c)
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
 			s.OnConnect(c.name, c.room)
 		case r := <-s.incomingRequests:
 			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
 			s.OnMessage(r.client.name, r.client.room, r.msg)
-		case r := <-s.responses:
-			r.client.conn.Write([]byte(r.msg))
-			log.Printf("[audit] %s: %s <- %s", r.client.room, r.client.name, r.msg)
+		case r := <-s.writeToClient:
+			c := s.clientHolder.GetByName(r.name)
+			s.send(c, r.msg)
+			log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.msg)
+		case r := <-s.writeToRoom:
+			for _, c := range s.clientHolder.GetByRoom(r.name) {
+				s.send(c, r.msg)
+				log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.msg)
+			}
 		}
 	}
 }
 
+func (s *Server) send(client *Client, msg string) {
+	client.conn.Write([]byte(msg))
+}
+
 func (s *Server) disconnect(client *Client) {
 	client.conn.Close()
-	delete(s.clients, client)
-	delete(s.clientsByName, client.name)
+	s.clientHolder.Remove(client)
 	s.OnDisconnect(client.name, client.room)
 }
 
 func (s *Server) DumpStats() {
-	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), len(s.clients))
+	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), s.clientHolder.Count())
 }
 
 func (s *Server) SendTo(name, message string) {
 	go func() {
-		s.responses <- Response{s.clientsByName[name], message}
+		s.writeToClient <- Response{name, message}
+	}()
+}
+
+func (s *Server) SendToRoom(name, message string) {
+	go func() {
+		s.writeToRoom <- Response{name, message}
 	}()
 }
 

@@ -43,6 +43,14 @@ func (h *ClientHolder) Remove(c *Client) {
 	delete(h.clients, c)
 }
 
+func (h *ClientHolder) GetAll() []*Client {
+	var clients = []*Client{}
+	for c := range h.clients {
+		clients = append(clients, c)
+	}
+	return clients
+}
+
 func (h *ClientHolder) GetByName(name string) *Client {
 	return h.clientsByName[name]
 }

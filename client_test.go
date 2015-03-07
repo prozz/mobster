@@ -17,6 +17,26 @@ func TestClientHolder_AddAndRemove(t *testing.T) {
 	}
 }
 
+func TestClientHolder_GetAll(t *testing.T) {
+	h := NewClientHolder()
+	c1 := &Client{name: "foo"}
+	c2 := &Client{name: "bar"}
+
+	h.Add(c1)
+	h.Add(c2)
+
+	r := h.GetAll()
+	if len(r) != 2 {
+		t.Error("expected two clients")
+	}
+
+	h.Remove(c1)
+	r = h.GetAll()
+	if len(r) != 1 {
+		t.Error("expected one client")
+	}
+}
+
 func TestClientHolder_GetByName(t *testing.T) {
 	h := NewClientHolder()
 	c1 := &Client{name: "foo"}
