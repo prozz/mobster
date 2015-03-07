@@ -95,6 +95,42 @@ func TestFlow_remoteHardDisconnect(t *testing.T) {
 	s.StopServer()
 }
 
+func TestFlow_messageHandler(t *testing.T) {
+	called := false
+	s := NewServer()
+	s.OnMessage = func(name, room, message string) {
+		called = true
+	}
+	s.StartServer(4009)
+
+	c := connectAndSend(t, "a foo 123")
+	send(t, c, "foo bar")
+
+	if !called {
+		t.Error("no OnMessage called after sending message")
+	}
+
+	s.StopServer()
+}
+
+func TestFlow_messageHandlerResponse(t *testing.T) {
+	s := NewServer()
+	s.OnMessage = func(name, room, message string) {
+		s.SendTo(name, message)
+	}
+	s.StartServer(4009)
+
+	c := connectAndSend(t, "a foo 123")
+	send(t, c, "foo bar")
+	response := readFromServer(t, c)
+
+	if response != "foo bar" {
+		t.Error("no valid response, should echo what was send")
+	}
+
+	s.StopServer()
+}
+
 func connect(t *testing.T) net.Conn {
 	conn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
@@ -118,6 +154,17 @@ func connectAndSend(t *testing.T, msgs ...string) net.Conn {
 	conn := connect(t)
 	send(t, conn, msgs...)
 	return conn
+}
+
+func readFromServer(t *testing.T, conn net.Conn) string {
+	conn.SetDeadline(time.Now().Add(50 * time.Millisecond))
+	var buf [512]byte
+	n, err := conn.Read(buf[0:])
+	if err != nil {
+		t.Errorf("cannot read: %s", err)
+		return ""
+	}
+	return string(buf[:n])
 }
 
 func sleep() {

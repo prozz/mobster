@@ -24,6 +24,8 @@ type Request struct {
 }
 
 type Response struct {
+	client *Client
+	msg string
 }
 
 type Server struct {
@@ -38,6 +40,7 @@ type Server struct {
 	listener net.Listener
 
 	clients map[*Client]bool
+	clientsByName map[string]*Client
 
 	// true when shutdown procedure started, false otherwise
 	shutdownMode bool
@@ -56,9 +59,12 @@ func NewServer() *Server {
 
 	s.incomingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
+	s.responses = make(chan Response)
 	s.disconnects = make(chan *Client)
 	s.shutdownNow = make(chan bool)
 	s.clients = make(map[*Client]bool)
+	s.clientsByName = make(map[string]*Client)
+
 	s.shutdownWaitGroup = &sync.WaitGroup{}
 
 	s.OnConnect = func(name, room string) {
@@ -147,6 +153,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	client := &Client{name, room, conn}
 	s.clients[client] = true
+	s.clientsByName[name] = client
 	s.incomingClients <- client
 
 	for {
@@ -172,7 +179,7 @@ func (s *Server) processingLoop() {
 	for {
 		select {
 		case <-s.shutdownNow:
-			log.Printf("[audit] disconnecting all clients")
+			log.Printf("disconnecting all clients")
 			for c := range s.clients {
 				s.disconnect(c)
 			}
@@ -187,7 +194,8 @@ func (s *Server) processingLoop() {
 			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
 			s.OnMessage(r.client.name, r.client.room, r.msg)
 		case r := <-s.responses:
-			log.Printf("[audit] xxx %s", r)
+			r.client.conn.Write([]byte(r.msg))
+			log.Printf("[audit] %s: %s <- %s", r.client.room, r.client.name, r.msg)
 		}
 	}
 }
@@ -195,11 +203,18 @@ func (s *Server) processingLoop() {
 func (s *Server) disconnect(client *Client) {
 	client.conn.Close()
 	delete(s.clients, client)
+	delete(s.clientsByName, client.name)
 	s.OnDisconnect(client.name, client.room)
 }
 
 func (s *Server) DumpStats() {
 	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), len(s.clients))
+}
+
+func (s *Server) SendTo(name, message string) {
+	go func() {
+		s.responses <- Response{name, message}
+	}()
 }
 
 // reads initial auth packet from connection
