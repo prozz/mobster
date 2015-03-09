@@ -43,6 +43,7 @@ type Server struct {
 
 	shutdownWaitGroup *sync.WaitGroup
 
+	OnAuth       func(message string) (username, room string, err error)
 	OnConnect    func(ctx Ctx, name, room string)
 	OnDisconnect func(ctx Ctx, name, room string)
 	OnMessage    func(ctx Ctx, name, room, message string)
@@ -62,6 +63,14 @@ func NewServer() *Server {
 
 	s.shutdownWaitGroup = &sync.WaitGroup{}
 
+	// default auth function accepts packets like "a <username> <room>"
+	s.OnAuth = func(message string) (username, room string, err error) {
+		tokens := strings.Split(message, " ")
+		if len(tokens) != 3 || tokens[0] != "a" {
+			return "", "", fmt.Errorf("malformed auth request <%s>", message)
+		}
+		return tokens[1], tokens[2], nil
+	}
 	s.OnConnect = func(ctx Ctx, name, room string) {
 		log.Println("warn: OnConnect default handler")
 	}
@@ -138,7 +147,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer s.shutdownWaitGroup.Done()
 
 	conn.SetDeadline(time.Now().Add(2 * time.Second))
-	name, room, err := auth(conn)
+	var req string
+	err := read(&req, conn)
+	if err != nil {
+		log.Println("cannot read auth packet:", err)
+		conn.Close()
+		return
+	}
+
+	name, room, err := s.OnAuth(req)
 	if err != nil {
 		log.Println("auth error:", err)
 		conn.Close()
@@ -229,23 +246,6 @@ func (s *Server) SendToRoom(name, message string) {
 	go func() {
 		s.writeToRoom <- Response{name, message}
 	}()
-}
-
-// reads initial auth packet from connection
-// returns username, room
-func auth(conn net.Conn) (string, string, error) {
-	var req string
-	err := read(&req, conn)
-	if err != nil {
-		return "", "", err
-	}
-
-	tokens := strings.Split(req, " ")
-	if len(tokens) != 3 || tokens[0] != "a" {
-		return "", "", fmt.Errorf("malformed auth request <%s>", req)
-	}
-
-	return tokens[1], tokens[2], nil
 }
 
 // reads from connection
