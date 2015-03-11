@@ -18,8 +18,7 @@ type Request struct {
 }
 
 type Response struct {
-	name string	// name of either room or user
-	msg  string
+	name, msg string
 }
 
 type Server struct {
@@ -28,9 +27,10 @@ type Server struct {
 
 	incomingClients  chan (*Client)
 	incomingRequests chan (Request)
-	writeToClient    chan (Response)
-	writeToRoom      chan (Response)
-	disconnects      chan (*Client)
+
+	responses chan(Response)
+	responsesToRoom chan(Response)
+	disconnects      chan (string) // name of user to disconnect
 
 	listener net.Listener
 
@@ -44,9 +44,9 @@ type Server struct {
 	shutdownWaitGroup *sync.WaitGroup
 
 	OnAuth       func(message string) (username, room string, err error)
-	OnConnect    func(ctx Ctx, name, room string)
-	OnDisconnect func(ctx Ctx, name, room string)
-	OnMessage    func(ctx Ctx, name, room, message string)
+	OnConnect    func(ops *Ops, name, room string)
+	OnDisconnect func(ops *Ops, name, room string)
+	OnMessage    func(ops *Ops, name, room, message string)
 }
 
 func NewServer() *Server {
@@ -54,9 +54,11 @@ func NewServer() *Server {
 
 	s.incomingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
-	s.writeToClient = make(chan Response)
-	s.writeToRoom = make(chan Response)
-	s.disconnects = make(chan *Client)
+
+	s.responses = make(chan Response)
+	s.responsesToRoom = make(chan Response)
+	s.disconnects = make(chan string)
+
 	s.shutdownNow = make(chan bool)
 
 	s.clientHolder = NewClientHolder()
@@ -71,13 +73,13 @@ func NewServer() *Server {
 		}
 		return tokens[1], tokens[2], nil
 	}
-	s.OnConnect = func(ctx Ctx, name, room string) {
+	s.OnConnect = func(ops *Ops, name, room string) {
 		log.Println("warn: OnConnect default handler")
 	}
-	s.OnDisconnect = func(ctx Ctx, name, room string) {
+	s.OnDisconnect = func(ops *Ops, name, room string) {
 		log.Println("warn: OnDisconnect default handler")
 	}
-	s.OnMessage = func(ctx Ctx, name, room, message string) {
+	s.OnMessage = func(ops *Ops, name, room, message string) {
 		log.Println("warn: OnMessage default handler")
 	}
 
@@ -172,7 +174,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if err != nil {
 			log.Println("read error:", err)
 			if !s.shutdownMode {
-				s.disconnects <- client
+				s.disconnects <- name
 			}
 			return
 		}
@@ -186,66 +188,83 @@ func (s *Server) handleConnection(conn net.Conn) {
 // extracted to go routine, so that rooms ops are thread safe (adding/removing clients)
 func (s *Server) processingLoop() {
 	defer s.shutdownWaitGroup.Done()
+	ops := &Ops{s}
 	for {
 		select {
 		case <-s.shutdownNow:
 			log.Printf("disconnecting all clients")
 			for _, c := range s.clientHolder.GetAll() {
-				s.disconnect(c)
+				c.conn.Close()
+				s.clientHolder.Remove(c)
+				s.OnDisconnect(ops, c.name, c.room)
 			}
 			return
-		case c := <-s.disconnects:
-			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
-			s.disconnect(c)
 		case c := <-s.incomingClients:
 			s.clientHolder.Add(c)
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
-			s.OnConnect(s, c.name, c.room)
+			s.OnConnect(ops, c.name, c.room)
 		case r := <-s.incomingRequests:
 			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
-			s.OnMessage(s, r.client.name, r.client.room, r.msg)
-		case r := <-s.writeToClient:
+			s.OnMessage(ops, r.client.name, r.client.room, r.msg)
+
+		// async requests from calls outside handlers
+		case n := <-s.disconnects:
+			c := s.clientHolder.GetByName(n)
+			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
+			c.conn.Close()
+			s.clientHolder.Remove(c)
+			s.OnDisconnect(ops, c.name, c.room)
+		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
-			s.send(c, r.msg)
-			log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.msg)
-		case r := <-s.writeToRoom:
+			c.conn.Write([]byte(r.msg))
+			log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.msg)
+		case r := <-s.responsesToRoom:
 			for _, c := range s.clientHolder.GetByRoom(r.name) {
-				s.send(c, r.msg)
+				c.conn.Write([]byte(r.msg))
 				log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.msg)
 			}
 		}
 	}
 }
 
-func (s *Server) send(client *Client, msg string) {
-	client.conn.Write([]byte(msg))
-}
-
-func (s *Server) disconnect(client *Client) {
-	client.conn.Close()
-	s.clientHolder.Remove(client)
-	s.OnDisconnect(s, client.name, client.room)
-}
-
 func (s *Server) DumpStats() {
 	log.Printf("uptime: %s, connected clients: %d", time.Since(s.startTime), s.clientHolder.Count())
 }
 
-type Ctx interface {
-	SendTo(name, message string)
-	SendToRoom(name, message string)
+// server operations that may be called from inside OnConnect, OnDisconnect, OnMessage
+type Ops struct {
+	server *Server
+}
+
+func (o *Ops) SendTo(name, message string) {
+	c := o.server.clientHolder.GetByName(name)
+	c.conn.Write([]byte(message))
+	log.Printf("[audit] %s: %s <- %s", c.room, name, message)
 }
 
 func (s *Server) SendTo(name, message string) {
-	go func() {
-		s.writeToClient <- Response{name, message}
-	}()
+	go func() { s.responses <- Response{name, message} }()
+}
+
+func (o *Ops) SendToRoom(name, message string) {
+	for _, c := range o.server.clientHolder.GetByRoom(name) {
+		c.conn.Write([]byte(message))
+		log.Printf("[audit] %s: %s <- %s", name, c.name, message)
+	}
 }
 
 func (s *Server) SendToRoom(name, message string) {
-	go func() {
-		s.writeToRoom <- Response{name, message}
-	}()
+	go func() { s.responsesToRoom <- Response{name, message} }()
+}
+
+func (o *Ops) Disconnect(name string) {
+	c := o.server.clientHolder.GetByName(name)
+	c.conn.Close()
+	o.server.clientHolder.Remove(c)
+}
+
+func (s *Server) Disconnect(name string) {
+	go func() { s.disconnects <- name }()
 }
 
 // reads from connection

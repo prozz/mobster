@@ -38,10 +38,10 @@ func TestStopServer_goroutines(t *testing.T) {
 func TestStopServer_disconnectHandler(t *testing.T) {
 	connections := 0
 	s := NewServer()
-	s.OnConnect = func(ctx Ctx, name, room string) {
+	s.OnConnect = func(ops *Ops, name, room string) {
 		connections++
 	}
-	s.OnDisconnect = func(ctx Ctx, name, room string) {
+	s.OnDisconnect = func(ops *Ops, name, room string) {
 		connections--
 	}
 	s.StartServer(4009)
@@ -63,7 +63,7 @@ func TestStopServer_disconnectHandler(t *testing.T) {
 func TestFlow_connectHandler(t *testing.T) {
 	connected := false
 	s := NewServer()
-	s.OnConnect = func(ctx Ctx, name, room string) {
+	s.OnConnect = func(ops *Ops, name, room string) {
 		connected = true
 	}
 	s.StartServer(4009)
@@ -79,7 +79,7 @@ func TestFlow_connectHandler(t *testing.T) {
 func TestFlow_remoteHardDisconnect(t *testing.T) {
 	called := false
 	s := NewServer()
-	s.OnDisconnect = func(ctx Ctx, name, room string) {
+	s.OnDisconnect = func(ops *Ops, name, room string) {
 		called = true
 	}
 	s.StartServer(4009)
@@ -98,7 +98,7 @@ func TestFlow_remoteHardDisconnect(t *testing.T) {
 func TestFlow_messageHandler(t *testing.T) {
 	called := false
 	s := NewServer()
-	s.OnMessage = func(ctx Ctx, name, room, message string) {
+	s.OnMessage = func(ops *Ops, name, room, message string) {
 		called = true
 	}
 	s.StartServer(4009)
@@ -115,8 +115,8 @@ func TestFlow_messageHandler(t *testing.T) {
 
 func TestFlow_echoResponse(t *testing.T) {
 	s := NewServer()
-	s.OnMessage = func(ctx Ctx, name, room, message string) {
-		ctx.SendTo(name, message)
+	s.OnMessage = func(ops *Ops, name, room, message string) {
+		ops.SendTo(name, message)
 	}
 	s.StartServer(4009)
 
@@ -133,8 +133,8 @@ func TestFlow_echoResponse(t *testing.T) {
 
 func TestFlow_echoToRoomResponse(t *testing.T) {
 	s := NewServer()
-	s.OnMessage = func(ctx Ctx, name, room, message string) {
-		ctx.SendToRoom(room, message)
+	s.OnMessage = func(ops *Ops, name, room, message string) {
+		ops.SendToRoom(room, message)
 	}
 	s.StartServer(4009)
 
