@@ -14,15 +14,14 @@ import (
 
 type Request struct {
 	client *Client
-	msg    string
+	message    string
 }
 
 type Response struct {
-	name, msg string
+	name, message string
 }
 
 type Server struct {
-	port      int
 	startTime time.Time
 
 	incomingClients  chan (*Client)
@@ -86,11 +85,10 @@ func NewServer() *Server {
 }
 
 func (s *Server) StartServer(port int) {
-	s.port = port
 	s.startTime = time.Now()
 
-	log.Printf("starting server on port %d", s.port)
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
+	log.Printf("starting server on port %d", port)
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal("cannot listen:", err)
 	}
@@ -177,9 +175,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 			return
 		}
-		msgs := strings.Split(req, "\n")
-		for _, msg := range msgs {
-			s.incomingRequests <- Request{client, msg}
+		messages := strings.Split(req, "\n")
+		for _, message := range messages {
+			s.incomingRequests <- Request{client, message}
 		}
 	}
 }
@@ -203,8 +201,8 @@ func (s *Server) processingLoop() {
 			log.Printf("[audit] %s: %s joins", c.room, c.name)
 			s.OnConnect(ops, c.name, c.room)
 		case r := <-s.incomingRequests:
-			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.msg)
-			s.OnMessage(ops, r.client.name, r.client.room, r.msg)
+			log.Printf("[audit] %s: %s -> %s", r.client.room, r.client.name, r.message)
+			s.OnMessage(ops, r.client.name, r.client.room, r.message)
 
 		// async requests from calls outside handlers
 		case n := <-s.disconnects:
@@ -215,12 +213,12 @@ func (s *Server) processingLoop() {
 			s.OnDisconnect(ops, c.name, c.room)
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
-			c.conn.Write([]byte(r.msg))
-			log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.msg)
+			c.conn.Write([]byte(r.message))
+			log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.message)
 		case r := <-s.responsesToRoom:
 			for _, c := range s.clientHolder.GetByRoom(r.name) {
-				c.conn.Write([]byte(r.msg))
-				log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.msg)
+				c.conn.Write([]byte(r.message))
+				log.Printf("[audit] %s: %s <- %s", c.room, c.name, r.message)
 			}
 		}
 	}
@@ -280,12 +278,12 @@ func (s *Server) Disconnect(name string) {
 }
 
 // reads from connection
-func read(msg *string, conn net.Conn) error {
+func read(message *string, conn net.Conn) error {
 	var buf [512]byte
 	n, err := conn.Read(buf[0:])
 	if err != nil {
 		return err
 	}
-	*msg = strings.TrimSpace(string(buf[:n]))
+	*message = strings.TrimSpace(string(buf[:n]))
 	return nil
 }
