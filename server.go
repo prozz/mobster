@@ -52,6 +52,8 @@ type Server struct {
 func NewServer() *Server {
 	s := &Server{}
 
+	s.clientHolder = NewClientHolder()
+
 	s.incomingClients = make(chan *Client)
 	s.incomingRequests = make(chan Request)
 
@@ -60,9 +62,6 @@ func NewServer() *Server {
 	s.disconnects = make(chan string)
 
 	s.shutdownNow = make(chan bool)
-
-	s.clientHolder = NewClientHolder()
-
 	s.shutdownWaitGroup = &sync.WaitGroup{}
 
 	// default auth function accepts packets like "a <username> <room>"
@@ -172,8 +171,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		var req string
 		err := read(&req, client.conn)
 		if err != nil {
-			log.Println("read error:", err)
 			if !s.shutdownMode {
+				log.Println("read error:", err)
 				s.disconnects <- name
 			}
 			return

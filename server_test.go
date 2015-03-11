@@ -151,6 +151,8 @@ func TestFlow_echoToRoomResponse(t *testing.T) {
 	if r2 != "boo" {
 		t.Error("expected response for r2")
 	}
+
+	s.StopServer()
 }
 
 func connect(t *testing.T) net.Conn {
