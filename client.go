@@ -59,6 +59,18 @@ func (h *ClientHolder) GetByRoom(name string) []*Client {
 	return h.clientsByRoom[name]
 }
 
+func (h *ClientHolder) GetRoomUsers(name string) []string {
+	var users []string
+	for _, c := range h.clientsByRoom[name] {
+		users = append(users, c.name)
+	}
+	return users
+}
+
+func (h *ClientHolder) GetRoomCount(name string) int {
+	return len(h.clientsByRoom[name])
+}
+
 func (h *ClientHolder) Count() int {
 	return len(h.clients)
 }

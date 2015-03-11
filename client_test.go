@@ -79,3 +79,24 @@ func TestClientHolder_GetByRoom(t *testing.T) {
 		t.Error("removed wrong client")
 	}
 }
+
+func TestClientHolder_GetRoomUsers(t *testing.T) {
+	h := NewClientHolder()
+	c1 := &Client{name: "foo", room: "1"}
+	c2 := &Client{name: "bar", room: "2"}
+	c3 := &Client{name: "baz", room: "1"}
+	c4 := &Client{name: "bam", room: "2"}
+
+	h.Add(c1)
+	h.Add(c2)
+	h.Add(c3)
+	h.Add(c4)
+
+	r := h.GetRoomUsers("1")
+	if len(r) != 2 {
+		t.Error("no proper clients in room")
+	}
+	if r[0] == "bar" || r[0] == "baz" {
+		t.Error("room user names are wrong")
+	}
+}

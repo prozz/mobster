@@ -236,16 +236,14 @@ type Ops struct {
 	server *Server
 }
 
+// send message to given user
 func (o *Ops) SendTo(name, message string) {
 	c := o.server.clientHolder.GetByName(name)
 	c.conn.Write([]byte(message))
 	log.Printf("[audit] %s: %s <- %s", c.room, name, message)
 }
 
-func (s *Server) SendTo(name, message string) {
-	go func() { s.responses <- Response{name, message} }()
-}
-
+// send message to all users in given room
 func (o *Ops) SendToRoom(name, message string) {
 	for _, c := range o.server.clientHolder.GetByRoom(name) {
 		c.conn.Write([]byte(message))
@@ -253,14 +251,29 @@ func (o *Ops) SendToRoom(name, message string) {
 	}
 }
 
-func (s *Server) SendToRoom(name, message string) {
-	go func() { s.responsesToRoom <- Response{name, message} }()
-}
-
+// disconnect user
 func (o *Ops) Disconnect(name string) {
 	c := o.server.clientHolder.GetByName(name)
 	c.conn.Close()
 	o.server.clientHolder.Remove(c)
+}
+
+// get names of all users in given room
+func (o *Ops) GetRoomUsers(name string) []string {
+	return o.server.clientHolder.GetRoomUsers(name)
+}
+
+// get number of users in given room
+func (o *Ops) GetRoomCount(name string) int {
+	return o.server.clientHolder.GetRoomCount(name)
+}
+
+func (s *Server) SendTo(name, message string) {
+	go func() { s.responses <- Response{name, message} }()
+}
+
+func (s *Server) SendToRoom(name, message string) {
+	go func() { s.responsesToRoom <- Response{name, message} }()
 }
 
 func (s *Server) Disconnect(name string) {
