@@ -28,9 +28,9 @@ type Server struct {
 	incomingClients  chan (*Client)
 	incomingRequests chan (Request)
 
-	responses chan(Response)
-	responsesToRoom chan(Response)
-	disconnects      chan (string) // name of user to disconnect
+	responses       chan (Response)
+	responsesToRoom chan (Response)
+	disconnects     chan (string) // name of user to disconnect
 
 	listener net.Listener
 
