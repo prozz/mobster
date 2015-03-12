@@ -216,8 +216,10 @@ func (s *Server) processingLoop() {
 			}
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
-			c.conn.Write([]byte(r.message))
-			log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.message)
+			if c != nil {
+				c.conn.Write([]byte(r.message))
+				log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.message)
+			}
 		case r := <-s.responsesToRoom:
 			for _, c := range s.clientHolder.GetByRoom(r.name) {
 				c.conn.Write([]byte(r.message))

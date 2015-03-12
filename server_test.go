@@ -178,6 +178,23 @@ func TestFlow_disconnectRoom(t *testing.T) {
 	s.StopServer()
 }
 
+func TestFlow_sendToDisconnected(t *testing.T) {
+	s := NewServer()
+	s.OnConnect = func(ops *Ops, name, room string) {
+		ops.Disconnect(name)
+	}
+	s.StartServer(4009)
+
+	connectAndSend(t, "a foo 123")
+
+	s.SendTo("foo", "blabla")
+	sleep()
+
+	// no panic due to nil pointer dereference means its ok
+
+	s.StopServer()
+}
+
 func connect(t *testing.T) net.Conn {
 	conn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
