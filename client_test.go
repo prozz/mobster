@@ -19,8 +19,8 @@ func TestClientHolder_AddAndRemove(t *testing.T) {
 
 func TestClientHolder_GetAll(t *testing.T) {
 	h := NewClientHolder()
-	c1 := &Client{name: "foo"}
-	c2 := &Client{name: "bar"}
+	c1 := &Client{user: "foo"}
+	c2 := &Client{user: "bar"}
 
 	h.Add(c1)
 	h.Add(c2)
@@ -39,8 +39,8 @@ func TestClientHolder_GetAll(t *testing.T) {
 
 func TestClientHolder_GetByName(t *testing.T) {
 	h := NewClientHolder()
-	c1 := &Client{name: "foo"}
-	c2 := &Client{name: "bar"}
+	c1 := &Client{user: "foo"}
+	c2 := &Client{user: "bar"}
 
 	h.Add(c1)
 	h.Add(c2)
@@ -59,8 +59,8 @@ func TestClientHolder_GetByName(t *testing.T) {
 
 func TestClientHolder_GetByRoom(t *testing.T) {
 	h := NewClientHolder()
-	c1 := &Client{name: "foo", room: "1"}
-	c2 := &Client{name: "bar", room: "1"}
+	c1 := &Client{user: "foo", room: "1"}
+	c2 := &Client{user: "bar", room: "1"}
 
 	h.Add(c1)
 	h.Add(c2)
@@ -82,10 +82,10 @@ func TestClientHolder_GetByRoom(t *testing.T) {
 
 func TestClientHolder_GetRoomUsers(t *testing.T) {
 	h := NewClientHolder()
-	c1 := &Client{name: "foo", room: "1"}
-	c2 := &Client{name: "bar", room: "2"}
-	c3 := &Client{name: "baz", room: "1"}
-	c4 := &Client{name: "bam", room: "2"}
+	c1 := &Client{user: "foo", room: "1"}
+	c2 := &Client{user: "bar", room: "2"}
+	c3 := &Client{user: "baz", room: "1"}
+	c4 := &Client{user: "bam", room: "2"}
 
 	h.Add(c1)
 	h.Add(c2)

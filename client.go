@@ -3,7 +3,7 @@ package mobster
 import "net"
 
 type Client struct {
-	name string
+	user string
 	room string
 	conn net.Conn
 }
@@ -24,7 +24,7 @@ func NewClientHolder() *ClientHolder {
 
 func (h *ClientHolder) Add(c *Client) {
 	h.clients[c] = true
-	h.clientsByName[c.name] = c
+	h.clientsByName[c.user] = c
 	h.clientsByRoom[c.room] = append(h.clientsByRoom[c.room], c)
 }
 
@@ -39,7 +39,7 @@ func (h *ClientHolder) Remove(c *Client) {
 	}
 	h.clientsByRoom[c.room] = append(room[:pos], room[pos+1:]...)
 
-	delete(h.clientsByName, c.name)
+	delete(h.clientsByName, c.user)
 	delete(h.clients, c)
 }
 
@@ -51,24 +51,24 @@ func (h *ClientHolder) GetAll() []*Client {
 	return clients
 }
 
-func (h *ClientHolder) GetByName(name string) *Client {
-	return h.clientsByName[name]
+func (h *ClientHolder) GetByName(user string) *Client {
+	return h.clientsByName[user]
 }
 
-func (h *ClientHolder) GetByRoom(name string) []*Client {
-	return h.clientsByRoom[name]
+func (h *ClientHolder) GetByRoom(room string) []*Client {
+	return h.clientsByRoom[room]
 }
 
-func (h *ClientHolder) GetRoomUsers(name string) []string {
+func (h *ClientHolder) GetRoomUsers(room string) []string {
 	var users []string
-	for _, c := range h.clientsByRoom[name] {
-		users = append(users, c.name)
+	for _, c := range h.clientsByRoom[room] {
+		users = append(users, c.user)
 	}
 	return users
 }
 
-func (h *ClientHolder) GetRoomCount(name string) int {
-	return len(h.clientsByRoom[name])
+func (h *ClientHolder) GetRoomCount(room string) int {
+	return len(h.clientsByRoom[room])
 }
 
 func (h *ClientHolder) Count() int {
