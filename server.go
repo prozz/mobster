@@ -207,7 +207,7 @@ func (s *Server) processingLoop() {
 		// async requests from calls outside handlers
 		case n := <-s.disconnects:
 			c := s.clientHolder.GetByName(n)
-			// may be nil when ops are used and accepting loop read nothing
+			// may be nil when ops disconnect is used and then accepting loop read nothing
 			if c != nil {
 				log.Printf("[audit] %s: %s disconnects", c.room, c.name)
 				c.conn.Close()
@@ -216,6 +216,7 @@ func (s *Server) processingLoop() {
 			}
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
+			// may be nil when already disconnected and async server call is used
 			if c != nil {
 				c.conn.Write([]byte(r.message))
 				log.Printf("[audit] %s: %s <- %s", c.room, r.name, r.message)
