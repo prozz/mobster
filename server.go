@@ -207,10 +207,13 @@ func (s *Server) processingLoop() {
 		// async requests from calls outside handlers
 		case n := <-s.disconnects:
 			c := s.clientHolder.GetByName(n)
-			log.Printf("[audit] %s: %s disconnects", c.room, c.name)
-			c.conn.Close()
-			s.clientHolder.Remove(c)
-			s.OnDisconnect(ops, c.name, c.room)
+			// may be nil when ops are used and accepting loop read nothing
+			if c != nil {
+				log.Printf("[audit] %s: %s disconnects", c.room, c.name)
+				c.conn.Close()
+				s.clientHolder.Remove(c)
+				s.OnDisconnect(ops, c.name, c.room)
+			}
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
 			c.conn.Write([]byte(r.message))
@@ -253,6 +256,14 @@ func (o *Ops) Disconnect(name string) {
 	c := o.server.clientHolder.GetByName(name)
 	c.conn.Close()
 	o.server.clientHolder.Remove(c)
+	log.Printf("[audit] %s: %s disconnects", c.room, c.name)
+}
+
+// disconnect all users in room
+func (o *Ops) DisconnectRoom(name string) {
+	for _, name := range o.server.clientHolder.GetRoomUsers(name) {
+		o.Disconnect(name)
+	}
 }
 
 // get names of all users in given room

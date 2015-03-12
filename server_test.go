@@ -155,6 +155,29 @@ func TestFlow_echoToRoomResponse(t *testing.T) {
 	s.StopServer()
 }
 
+func TestFlow_disconnectRoom(t *testing.T) {
+	s := NewServer()
+
+	roomCount := 0
+	s.OnConnect = func(ops *Ops, name, room string) {
+		if name == "baz" {
+			ops.DisconnectRoom(room)
+			roomCount = ops.GetRoomCount(room)
+		}
+	}
+	s.StartServer(4009)
+
+	connectAndSend(t, "a foo 123")
+	connectAndSend(t, "a bar 123")
+	connectAndSend(t, "a baz 123")
+
+	if roomCount != 0 {
+		t.Error("disconnect all from room failure")
+	}
+
+	s.StopServer()
+}
+
 func connect(t *testing.T) net.Conn {
 	conn, err := net.Dial("tcp", "127.0.0.1:4009")
 	if err != nil {
