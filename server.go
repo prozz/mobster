@@ -13,8 +13,8 @@ import (
 )
 
 type Request struct {
-	client *Client
-	message    string
+	client  *Client
+	message string
 }
 
 type Response struct {
