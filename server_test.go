@@ -232,5 +232,5 @@ func readFromServer(t *testing.T, conn net.Conn) string {
 }
 
 func sleep() {
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(1 * time.Millisecond)
 }
