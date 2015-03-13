@@ -153,6 +153,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		conn.Close()
 		return
 	}
+	conn.SetDeadline(time.Time{})
 
 	user, room, err := s.OnAuth(req)
 	if err != nil {
@@ -160,7 +161,6 @@ func (s *Server) handleConnection(conn net.Conn) {
 		conn.Close()
 		return
 	}
-	conn.SetDeadline(time.Time{})
 
 	client := &Client{user, room, conn}
 	s.incomingClients <- client
