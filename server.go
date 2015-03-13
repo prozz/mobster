@@ -42,6 +42,9 @@ type Server struct {
 
 	shutdownWaitGroup *sync.WaitGroup
 
+	// if true there will be no timeout for auth packet
+	Debug bool
+
 	OnAuth       func(message string) (username, room string, err error)
 	OnConnect    func(ops *Ops, user, room string)
 	OnDisconnect func(ops *Ops, user, room string)
@@ -145,7 +148,9 @@ func (s *Server) acceptingLoop() {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.shutdownWaitGroup.Done()
 
-	conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if !s.Debug {
+		conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+	}
 	var req string
 	err := read(&req, conn)
 	if err != nil {
