@@ -149,7 +149,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	defer s.shutdownWaitGroup.Done()
 
 	if !s.Debug {
-		conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(1 * time.Second))
 	}
 	var req string
 	err := read(&req, conn)
