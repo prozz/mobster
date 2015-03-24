@@ -148,6 +148,7 @@ func (s *Server) acceptingLoop() {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer s.shutdownWaitGroup.Done()
 
+	log.Println("new connection:", conn.RemoteAddr().String())
 	if !s.Debug {
 		conn.SetDeadline(time.Now().Add(1 * time.Second))
 	}
