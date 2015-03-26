@@ -223,11 +223,8 @@ func (s *Server) processingLoop() {
 				s.OnDisconnect(ops, c.user, c.room)
 			}
 		case room := <-s.disconnectsForRoom:
-			for _, c := range s.clientHolder.GetByRoom(room) {
-				log.Printf("[audit] %s: %s disconnects", c.room, c.user)
-				c.conn.Close()
-			}
-			s.clientHolder.RemoveRoom(room)
+			users := s.clientHolder.GetRoomUsers(room)
+			s.DisconnectUsers(users...)
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
 			// may be nil when already disconnected and async server call is used
@@ -303,6 +300,14 @@ func (s *Server) SendToRoom(room, message string) {
 
 func (s *Server) Disconnect(user string) {
 	go func() { s.disconnects <- user }()
+}
+
+func (s *Server) DisconnectUsers(users ...string) {
+	go func() {
+		for _, user := range users {
+			s.disconnects <- user
+		}
+	}()
 }
 
 func (s *Server) DisconnectRoom(room string) {

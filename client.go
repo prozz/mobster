@@ -39,17 +39,12 @@ func (h *ClientHolder) Remove(c *Client) {
 	}
 	h.clientsByRoom[c.room] = append(room[:pos], room[pos+1:]...)
 
+	if len(h.clientsByRoom[c.room]) == 0 {
+		delete(h.clientsByRoom, c.room)
+	}
+
 	delete(h.clientsByName, c.user)
 	delete(h.clients, c)
-}
-
-func (h *ClientHolder) RemoveRoom(room string) {
-	clients := h.clientsByRoom[room]
-	for _, c := range clients {
-		delete(h.clientsByName, c.user)
-		delete(h.clients, c)
-	}
-	delete(h.clientsByRoom, room)
 }
 
 func (h *ClientHolder) GetAll() []*Client {
