@@ -17,6 +17,31 @@ func TestClientHolder_AddAndRemove(t *testing.T) {
 	}
 }
 
+func TestClientHolder_AddAndRemoveRoom(t *testing.T) {
+	h := NewClientHolder()
+	c := &Client{room: "foo"}
+	h.Add(c)
+	if h.Count() != 1 {
+		t.Error("expected one client")
+	}
+	h.RemoveRoom("foo")
+	if h.Count() != 0 {
+		t.Error("expected no clients")
+	}
+	if h.GetByRoom("foo") != nil {
+		t.Error("expected no clients")
+	}
+	if len(h.GetAll()) != 0 {
+		t.Error("expected no clients")
+	}
+	if h.GetRoomUsers("foo") != nil {
+		t.Error("expected no clients")
+	}
+	if h.GetRoomCount("foo") != 0 {
+		t.Error("expected no clients")
+	}
+}
+
 func TestClientHolder_GetAll(t *testing.T) {
 	h := NewClientHolder()
 	c1 := &Client{user: "foo"}

@@ -27,9 +27,10 @@ type Server struct {
 	incomingClients  chan (*Client)
 	incomingRequests chan (Request)
 
-	responses       chan (Response)
-	responsesToRoom chan (Response)
-	disconnects     chan (string) // name of user to disconnect
+	responses          chan (Response)
+	responsesToRoom    chan (Response)
+	disconnects        chan (string) // name of user to disconnect
+	disconnectsForRoom chan (string) // name of room to disconnect all users from
 
 	listener net.Listener
 
@@ -62,6 +63,7 @@ func NewServer() *Server {
 	s.responses = make(chan Response)
 	s.responsesToRoom = make(chan Response)
 	s.disconnects = make(chan string)
+	s.disconnectsForRoom = make(chan string)
 
 	s.shutdownNow = make(chan bool)
 	s.shutdownWaitGroup = &sync.WaitGroup{}
@@ -220,6 +222,12 @@ func (s *Server) processingLoop() {
 				s.clientHolder.Remove(c)
 				s.OnDisconnect(ops, c.user, c.room)
 			}
+		case room := <-s.disconnectsForRoom:
+			for _, c := range s.clientHolder.GetByRoom(room) {
+				log.Printf("[audit] %s: %s disconnects", c.room, c.user)
+				c.conn.Close()
+			}
+			s.clientHolder.RemoveRoom(room)
 		case r := <-s.responses:
 			c := s.clientHolder.GetByName(r.name)
 			// may be nil when already disconnected and async server call is used
@@ -295,6 +303,10 @@ func (s *Server) SendToRoom(room, message string) {
 
 func (s *Server) Disconnect(user string) {
 	go func() { s.disconnects <- user }()
+}
+
+func (s *Server) DisconnectRoom(room string) {
+	go func() { s.disconnectsForRoom <- room }()
 }
 
 // reads from connection
